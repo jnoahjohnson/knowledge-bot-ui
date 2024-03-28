@@ -21,6 +21,7 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { QuestionMarkIcon } from "@radix-ui/react-icons";
 import { Loader2 } from "lucide-react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { Checkbox } from "~/components/ui/checkbox";
 
 export const meta: MetaFunction = () => {
   return [
@@ -32,10 +33,13 @@ export const meta: MetaFunction = () => {
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const question = formData.get("question");
+  const knowledge = formData.get("knowledge");
   if (!question || typeof question !== "string") return;
 
   const { answer } = await fetch(
-    `https://knowledge-bot.jnoahjohnson.workers.dev/ask?question=${question}`
+    `https://knowledge-bot.jnoahjohnson.workers.dev/${
+      knowledge === "on" ? "ask" : "dumb-ask"
+    }?question=${question}`
   )
     .then((res) => {
       if (!res.ok) {
@@ -52,7 +56,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
   console.log({ question, answer });
 
-  return json({ question, answer });
+  return json({
+    question,
+    answer,
+    customKnowledge: !knowledge || knowledge !== "on",
+  });
 }
 
 export default function Ask() {
@@ -61,12 +69,17 @@ export default function Ask() {
   const [parent] = useAutoAnimate<HTMLDivElement>();
 
   const [messages, setMessages] = React.useState<
-    { question: string; answer: string }[]
+    { question: string; answer: string; customKnowledge: boolean }[]
   >([]);
 
   React.useEffect(() => {
-    if (data && !messages.some((m) => m.question === data.question)) {
-      setMessages((prev) => [...prev, data]);
+    if (
+      data &&
+      !messages.some(
+        (m) => m.question === data.question && m.answer === data.answer
+      )
+    ) {
+      setMessages((prev) => [data, ...prev]);
     }
   }, [data, messages]);
 
@@ -88,6 +101,16 @@ export default function Ask() {
             )}
             Ask
           </Button>
+
+          <div className="flex items-center gap-2 mt-1">
+            <Checkbox id="knowledge" name="knowledge" />
+            <label
+              htmlFor="knowledge"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Disable Custom Knowledge
+            </label>
+          </div>
         </CardContent>
         <CardFooter>
           <Link to="/train">
@@ -101,8 +124,11 @@ export default function Ask() {
         ref={parent}
         className="mt-4 flex flex-col gap-4 overflow-auto flex-1"
       >
-        {messages.reverse().map((message) => (
-          <Alert key={message.question}>
+        {messages.map((message) => (
+          <Alert
+            key={`${message.question}-${message.answer}`}
+            variant={message.customKnowledge ? "default" : "destructive"}
+          >
             <QuestionMarkIcon />
             <AlertTitle>{message.question}</AlertTitle>
             <AlertDescription>{message.answer}</AlertDescription>
